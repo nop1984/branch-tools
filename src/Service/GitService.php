@@ -151,6 +151,20 @@ class GitService
     }
     
     /**
+     * Check if there are any staged changes ready for commit
+     * 
+     * @return bool True if there are staged changes, false otherwise
+     */
+    public function hasStagedChanges()
+    {
+        $output = [];
+        exec('git diff --cached --quiet 2>&1', $output, $returnCode);
+        
+        // git diff --quiet returns 0 if no differences, 1 if differences exist
+        return $returnCode !== 0;
+    }
+    
+    /**
      * Get all remote branches
      */
     public function getRemoteBranches()

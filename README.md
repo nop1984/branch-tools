@@ -129,16 +129,22 @@ git commit --no-verify
 ```
 
 **What it does:**
-1. Updates workflow YAML files if on feature branch (skips main branches)
-2. Validates and updates build.txt if needed
-3. Double-checks build numbers against all remote branches
-4. Suggests alternatives if chosen number is taken
-5. Returns exit code 0 for success, 1 for failure (suitable for hooks)
+1. **Checks for staged changes** - Skips all updates if commit is empty
+2. Updates workflow YAML files if on feature branch (skips main branches)
+3. Validates and updates build.txt if needed
+4. Double-checks build numbers against all remote branches
+5. Suggests alternatives if chosen number is taken
+6. Returns exit code 0 for success, 1 for failure (suitable for hooks)
 
 **Options:**
 - `--auto, -a`: Auto mode - auto-increment build and update workflows without prompts
 - `--skip-workflows`: Skip workflow file updates
 - `--skip-build`: Skip build number updates
+
+**Smart empty commit detection:**
+- If no changes are staged, all file updates are skipped automatically
+- Useful for `git commit --allow-empty` or `git commit --amend --no-edit`
+- Prevents unnecessary workflow/build number changes
 
 **Git Hook Setup:**
 ```bash

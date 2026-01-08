@@ -61,6 +61,18 @@ class PrepareCommitCommand extends Command
             
             $this->currentBranch = $this->gitService->getCurrentBranch();
             $output->writeln("Current branch: <info>{$this->currentBranch}</info>");
+            
+            // Check if there are any staged changes
+            $hasStagedChanges = $this->gitService->hasStagedChanges();
+            
+            if (!$hasStagedChanges) {
+                $output->writeln("<comment>⊘ No staged changes detected - skipping all updates</comment>");
+                $output->writeln("");
+                $output->writeln("=== Summary ===");
+                $output->writeln("<info>✓ Empty commit - no preparation needed</info>");
+                return Command::SUCCESS;
+            }
+            
             $output->writeln("");
             
             $workflowsUpdated = false;
