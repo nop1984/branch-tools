@@ -1,0 +1,39 @@
+#!/bin/bash
+#
+# Sample Git Pre-Commit Hook for TestRail Repository
+# 
+# Installation:
+#   cp tools/branch-tools/pre-commit.sample .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# This hook will:
+# 1. Update workflow YAML files if on a feature branch
+# 2. Auto-increment build.txt if needed
+# 3. Validate build number is not taken in any remote branch
+# 4. Auto-stage modified files (workflows and build.txt)
+
+# Get the repository root
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+# Run the prepare-commit command in auto mode
+"${REPO_ROOT}/tools/branch-tools/branch-tools" prepare-commit --auto
+
+# Capture exit code
+EXIT_CODE=$?
+
+# If successful and files were modified, stage them
+if [ $EXIT_CODE -eq 0 ]; then
+    # Check if workflow files were modified
+    if git diff --name-only | grep -q ".github/workflows/"; then
+        git add .github/workflows/set-gizmo-branch-var.yml .github/workflows/ci-build-with-kiuwan-analysis.yml 2>/dev/null
+        echo "✓ Workflow files staged"
+    fi
+    
+    # Check if build.txt was modified
+    if git diff --name-only | grep -q "build.txt"; then
+        git add build.txt 2>/dev/null
+        echo "✓ build.txt staged"
+    fi
+fi
+
+exit $EXIT_CODE

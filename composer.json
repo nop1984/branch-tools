@@ -1,0 +1,16 @@
+{
+    "name": "testrail/branch-tools",
+    "description": "CLI tools for managing branches and build numbers",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "symfony/console": "^5.4|^6.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "TestrailTools\\": "src/"
+        }
+    },
+    "bin": ["branch-tools"],
+    "license": "proprietary"
+}

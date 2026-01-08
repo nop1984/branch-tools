@@ -1,0 +1,38 @@
+#!/usr/bin/env php
+<?php
+
+// Find autoloader
+$autoloadPaths = [
+    __DIR__ . '/../../vendor/autoload.php',
+    __DIR__ . '/vendor/autoload.php',
+];
+
+$autoloaded = false;
+foreach ($autoloadPaths as $file) {
+    if (file_exists($file)) {
+        require $file;
+        $autoloaded = true;
+        break;
+    }
+}
+
+if (!$autoloaded) {
+    fwrite(STDERR, "Autoload file not found. Run 'composer install' first.\n");
+    exit(1);
+}
+
+use Symfony\Component\Console\Application;
+use TestrailTools\Command\BuildInfoCommand;
+use TestrailTools\Command\UpdateWorkflowCommand;
+use TestrailTools\Command\PrepareCommitCommand;
+use TestrailTools\Command\InstallHookCommand;
+
+$application = new Application('Branch Tools', '1.0.0');
+
+// Register commands
+$application->add(new BuildInfoCommand());
+$application->add(new UpdateWorkflowCommand());
+$application->add(new PrepareCommitCommand());
+$application->add(new InstallHookCommand());
+
+$application->run();

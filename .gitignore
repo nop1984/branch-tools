@@ -1,0 +1,40 @@
+# Composer dependencies
+/vendor/
+
+# Composer lock file (optional - uncomment if you want to exclude it)
+# composer.lock
+
+# IDE and editor files
+/.vscode/
+/.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Backup files
+*.backup
+*.bak
+*~
+
+# Test coverage
+coverage/
+.phpunit.result.cache
+
+# Environment files (if any)
+.env
+.env.local
+.env.*.local
