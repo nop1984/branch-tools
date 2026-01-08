@@ -56,6 +56,7 @@ class GitService
         $searchPath = $currentDir;
         $maxLevels = 10; // Safety limit to prevent infinite loops
         $level = 0;
+        $skippedBranchTools = false; // Track if we skipped branch-tools repo
         
         while ($level < $maxLevels) {
             // Check if this directory is a git repository
@@ -68,20 +69,23 @@ class GitService
                     $detectedRepo = trim($checkOutput[0]);
                     chdir($originalDir);
                     
-                    // Warn if we detected branch-tools itself (improper setup)
+                    // Check if this is branch-tools itself (improper setup)
                     $repoBasename = basename($detectedRepo);
                     $isInBranchTools = strpos($detectedRepo, '.git/branch-tools') !== false;
                     
                     if ($isInBranchTools || $repoBasename === 'branch-tools') {
-                        if ($output) {
-                            $output->writeln("<error>⚠ Warning: Detected branch-tools repository itself!</error>");
-                            $output->writeln("<comment>This is not a proper setup. branch-tools should be installed in .git/branch-tools/ of the target repository.</comment>");
-                            $output->writeln("<comment>Continuing search for parent repository...</comment>");
-                            $output->writeln("");
-                        }
-                        // Continue searching upwards
+                        // Mark that we found and skipped branch-tools
+                        $skippedBranchTools = true;
+                        // Jump outside of this repository and continue searching
+                        $searchPath = dirname($detectedRepo);
+                        $level++;
+                        continue;
                     } else {
                         // Found a valid parent repository
+                        // Warn if we had to skip branch-tools during detection
+                        if ($skippedBranchTools && $output) {
+                            $output->writeln("<comment>Note: Detected branch-tools as standalone repository - searching parent...</comment>");
+                        }
                         return $detectedRepo;
                     }
                 }
