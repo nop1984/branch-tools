@@ -7,6 +7,11 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * Command to install pre-commit hook in target repository
+ * 
+ * @author Mykola Dolynskyi aka nop1984 <gospodin.p.zh@gmail.com>
+ */
 class InstallHookCommand extends Command
 {
     protected function configure()

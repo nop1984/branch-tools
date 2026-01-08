@@ -11,6 +11,11 @@ use Symfony\Component\Console\Question\ConfirmationQuestion;
 use TestrailTools\Service\GitService;
 use TestrailTools\Service\BuildNumberService;
 
+/**
+ * Command to collect and analyze build.txt values from remote branches
+ * 
+ * @author Mykola Dolynskyi aka nop1984 <gospodin.p.zh@gmail.com>
+ */
 class BuildInfoCommand extends Command
 {
     const MIN_BUILD_NUMBER = 5000;

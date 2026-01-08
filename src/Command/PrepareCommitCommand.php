@@ -12,6 +12,11 @@ use TestrailTools\Service\GitService;
 use TestrailTools\Service\BuildNumberService;
 use TestrailTools\Service\WorkflowService;
 
+/**
+ * Command to prepare repository for commit (update workflows and build number)
+ * 
+ * @author Mykola Dolynskyi aka nop1984 <gospodin.p.zh@gmail.com>
+ */
 class PrepareCommitCommand extends Command
 {
     private $gitService;

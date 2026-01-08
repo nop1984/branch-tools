@@ -6,6 +6,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Service for Git operations
+ * 
+ * @author Mykola Dolynskyi aka nop1984 <gospodin.p.zh@gmail.com>
  */
 class GitService
 {

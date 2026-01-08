@@ -3,7 +3,9 @@
 namespace TestrailTools\Service;
 
 /**
- * Service for updating GitHub workflow files
+ * Service for managing GitHub workflow files
+ * 
+ * @author Mykola Dolynskyi aka nop1984 <gospodin.p.zh@gmail.com>
  */
 class WorkflowService
 {

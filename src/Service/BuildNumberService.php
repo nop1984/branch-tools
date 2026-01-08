@@ -6,6 +6,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Service for build number operations
+ * 
+ * @author Mykola Dolynskyi aka nop1984 <gospodin.p.zh@gmail.com>
  */
 class BuildNumberService
 {

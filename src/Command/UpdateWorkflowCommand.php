@@ -9,6 +9,11 @@ use Symfony\Component\Console\Output\OutputInterface;
 use TestrailTools\Service\GitService;
 use TestrailTools\Service\WorkflowService;
 
+/**
+ * Command to update GitHub workflow files with current branch
+ * 
+ * @author Mykola Dolynskyi aka nop1984 <gospodin.p.zh@gmail.com>
+ */
 class UpdateWorkflowCommand extends Command
 {
     private $gitService;

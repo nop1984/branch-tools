@@ -2,6 +2,14 @@
     "name": "testrail/branch-tools",
     "description": "CLI tools for managing branches and build numbers",
     "type": "project",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Mykola Dolynskyi aka nop1984",
+            "email": "gospodin.p.zh@gmail.com",
+            "homepage": "https://github.com/nop1984"
+        }
+    ],
     "require": {
         "php": ">=7.4",
         "symfony/console": "^5.4|^6.0"
@@ -11,6 +19,5 @@
             "TestrailTools\\": "src/"
         }
     },
-    "bin": ["branch-tools"],
-    "license": "proprietary"
+    "bin": ["branch-tools"]
 }
