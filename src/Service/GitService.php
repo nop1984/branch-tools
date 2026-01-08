@@ -36,6 +36,75 @@ class GitService
     }
     
     /**
+     * Detect the parent repository path when running from .git/branch-tools
+     * 
+     * This method recursively searches upwards from the current directory until it finds
+     * a git repository. It validates that the detected path is not branch-tools itself.
+     * 
+     * @param OutputInterface $output Output interface for warnings
+     * @return string Path to the parent repository
+     * @throws \Exception if parent repository cannot be detected
+     */
+    public static function detectParentRepository(OutputInterface $output = null)
+    {
+        // Get the directory of the calling command
+        $backtrace = debug_backtrace();
+        $callerFile = $backtrace[0]['file'] ?? __FILE__;
+        $currentDir = dirname($callerFile);
+        
+        $originalDir = getcwd();
+        $searchPath = $currentDir;
+        $maxLevels = 10; // Safety limit to prevent infinite loops
+        $level = 0;
+        
+        while ($level < $maxLevels) {
+            // Check if this directory is a git repository
+            if (is_dir($searchPath)) {
+                chdir($searchPath);
+                $checkOutput = [];
+                exec('git rev-parse --show-toplevel 2>&1', $checkOutput, $returnCode);
+                
+                if ($returnCode === 0) {
+                    $detectedRepo = trim($checkOutput[0]);
+                    chdir($originalDir);
+                    
+                    // Warn if we detected branch-tools itself (improper setup)
+                    $repoBasename = basename($detectedRepo);
+                    $isInBranchTools = strpos($detectedRepo, '.git/branch-tools') !== false;
+                    
+                    if ($isInBranchTools || $repoBasename === 'branch-tools') {
+                        if ($output) {
+                            $output->writeln("<error>⚠ Warning: Detected branch-tools repository itself!</error>");
+                            $output->writeln("<comment>This is not a proper setup. branch-tools should be installed in .git/branch-tools/ of the target repository.</comment>");
+                            $output->writeln("<comment>Continuing search for parent repository...</comment>");
+                            $output->writeln("");
+                        }
+                        // Continue searching upwards
+                    } else {
+                        // Found a valid parent repository
+                        return $detectedRepo;
+                    }
+                }
+            }
+            
+            // Move up one level
+            $parentDir = dirname($searchPath);
+            
+            // Check if we've reached the filesystem root
+            if ($parentDir === $searchPath) {
+                chdir($originalDir);
+                throw new \Exception("Could not detect parent repository after searching {$level} levels up. Please specify the repository path explicitly.");
+            }
+            
+            $searchPath = $parentDir;
+            $level++;
+        }
+        
+        chdir($originalDir);
+        throw new \Exception("Could not detect parent repository after {$maxLevels} levels. Please specify the repository path explicitly.");
+    }
+    
+    /**
      * Validate and get repository root
      */
     public function validateAndGetRepoRoot($path, OutputInterface $output)

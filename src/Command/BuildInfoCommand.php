@@ -45,7 +45,7 @@ class BuildInfoCommand extends Command
         try {
             $repoPath = $input->getArgument('repo');
             if ($repoPath === null) {
-                $repoPath = dirname(dirname(__DIR__));
+                $repoPath = GitService::detectParentRepository($output);
             }
             
             // Initialize services

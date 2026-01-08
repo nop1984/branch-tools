@@ -49,6 +49,34 @@ chmod +x branch-tools
 # - Stage modified files
 ```
 
+## Repository Detection
+
+All commands automatically detect the target repository by recursively searching upward from the tool's location until a git repository is found. This works even if branch-tools is installed in different locations:
+
+- **Recommended setup:** `.git/branch-tools/` (within the target repository)
+- **Alternative setup:** `tools/branch-tools/` (sibling to src/)
+- **Development setup:** Any other location with access to the target repository
+
+**How it works:**
+1. Starts from the command file's directory
+2. Checks each parent directory if it's a git repository
+3. Skips the branch-tools repository itself if detected
+4. Returns the first valid parent repository found
+5. Falls back to manual path specification if auto-detection fails
+
+**Manual repository path (optional):**
+```bash
+# Most commands support explicit repository path
+./branch-tools prepare-commit /path/to/testrail-core
+./branch-tools install-hook /path/to/testrail-core
+./branch-tools build:info --repo=/path/to/testrail-core
+```
+
+**Warnings:**
+- If branch-tools is detected as a standalone repository (not in `.git/`), you'll see a warning
+- This indicates an improper setup - branch-tools should be installed within the target repository
+- The tool will continue searching for the parent repository automatically
+
 ## Commands
 
 ### Install Hook (`install-hook`)
