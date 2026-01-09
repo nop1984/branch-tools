@@ -35,6 +35,11 @@ class GitService
         $this->remote = $remote;
     }
     
+    public function getRemote()
+    {
+        return $this->remote;
+    }
+    
     /**
      * Detect the parent repository path when running from .git/branch-tools
      * 
@@ -45,7 +50,7 @@ class GitService
      * @return string Path to the parent repository
      * @throws \Exception if parent repository cannot be detected
      */
-    public static function detectParentRepository(OutputInterface $output = null)
+    public static function detectParentRepository(?OutputInterface $output = null)
     {
         // Get the directory of the calling command
         $backtrace = debug_backtrace();
@@ -168,6 +173,28 @@ class GitService
         return $returnCode !== 0;
     }
     
+    /**
+     * Check if a specific branch exists on remote
+     */
+    public function remoteBranchExists($branch)
+    {
+        $output = [];
+        exec("git ls-remote --heads {$this->remote} {$branch} 2>&1", $output, $returnCode);
+        
+        return $returnCode === 0 && !empty($output);
+    }
+
+    /**
+     * Fetch a specific branch/ref from remote
+     */
+    public function fetchBranch($branch)
+    {
+        $output = [];
+        exec("git fetch {$this->remote} {$branch} 2>&1", $output, $returnCode);
+        
+        return $returnCode === 0;
+    }
+
     /**
      * Get all remote branches
      */

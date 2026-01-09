@@ -30,12 +30,13 @@ class InstallHookCommand extends Command
         
         try {
             $repoPath = $input->getArgument('repo');
-            if ($repoPath === null) {
-                // Default to one level up from CLI location (../../ from src/Command/)
-                $repoPath = dirname(dirname(__DIR__));
-            }
             
-            $repoRoot = $this->validateAndGetRepoRoot($repoPath, $output);
+            if ($repoPath) {
+                $repoRoot = $this->validateAndGetRepoRoot($repoPath, $output);
+            } else {
+                // Use GitService to find the parent repository (skipping branch-tools itself)
+                $repoRoot = \TestrailTools\Service\GitService::detectParentRepository($output);
+            }
             
             // Determine the relative path from repo root to branch-tools
             $branchToolsPath = realpath(__DIR__ . '/../../branch-tools');
@@ -197,9 +198,9 @@ class InstallHookCommand extends Command
 
 # Get the repository root
 REPO_ROOT=\$(git rev-parse --show-toplevel)
-${interactiveSetup}
+{$interactiveSetup}
 # Run the prepare-commit command
-"\${REPO_ROOT}/${branchToolsRelativePath}" prepare-commit${autoFlag}
+"\${REPO_ROOT}/{$branchToolsRelativePath}" prepare-commit{$autoFlag}
 
 # Capture exit code
 EXIT_CODE=\$?

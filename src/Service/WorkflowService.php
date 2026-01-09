@@ -2,6 +2,8 @@
 
 namespace TestrailTools\Service;
 
+use Symfony\Component\Console\Output\OutputInterface;
+
 /**
  * Service for managing GitHub workflow files
  * 
@@ -22,18 +24,36 @@ class WorkflowService
     
     /**
      * Update set-gizmo-branch-var.yml with new case entry
+     * 
+     * @return array [status => 'updated'|'skipped'|'error', 'reason' => '...', 'file' => '...']
      */
     public function updateGizmoWorkflow($currentBranch, $originBranch)
     {
+        $fileName = basename($this->gizmoWorkflowPath);
+        $result = ['file' => $fileName, 'status' => 'skipped', 'reason' => 'Unknown reason'];
+
         if (!file_exists($this->gizmoWorkflowPath)) {
-            return false;
+            $result['status'] = 'error';
+            $result['reason'] = 'File not found';
+            return $result;
         }
         
         $content = file_get_contents($this->gizmoWorkflowPath);
         
+        // Check for default case match
+        $defaultPattern = '/\*\)\s+echo\s+"([^"]+)"\s*;;/';
+        if (preg_match($defaultPattern, $content, $matches)) {
+            $defaultBranch = $matches[1];
+            if ($defaultBranch === $originBranch) {
+                $result['reason'] = "No entry for {$currentBranch} necessary (matches default)";
+                return $result;
+            }
+        }
+        
         // Check if branch already exists
         if (strpos($content, "{$currentBranch})") !== false) {
-            return false;
+            $result['reason'] = "Branch entry {$currentBranch} already exists";
+            return $result;
         }
         
         $pattern = '/(\s+)(\*\))/';
@@ -42,27 +62,44 @@ class WorkflowService
         $updatedContent = preg_replace($pattern, $newEntry . '$2', $content, 1);
         
         if ($updatedContent === $content) {
-            return false;
+            $result['status'] = 'error';
+            $result['reason'] = 'Pattern mismatch';
+            return $result;
         }
         
-        file_put_contents($this->gizmoWorkflowPath, $updatedContent);
-        return true;
+        if (file_put_contents($this->gizmoWorkflowPath, $updatedContent) !== false) {
+            $result['status'] = 'updated';
+            $result['reason'] = '';
+        } else {
+             $result['status'] = 'error';
+             $result['reason'] = 'Write failed';
+        }
+        
+        return $result;
     }
     
     /**
      * Update ci-build-with-kiuwan-analysis.yml branches list
+     * 
+     * @return array [status => 'updated'|'skipped'|'error', 'reason' => '...', 'file' => '...']
      */
     public function updateKiuwanWorkflow($currentBranch)
     {
+        $fileName = basename($this->kiuwanWorkflowPath);
+        $result = ['file' => $fileName, 'status' => 'skipped', 'reason' => 'Unknown reason'];
+
         if (!file_exists($this->kiuwanWorkflowPath)) {
-            return false;
+            $result['status'] = 'error';
+            $result['reason'] = 'File not found';
+            return $result;
         }
         
         $content = file_get_contents($this->kiuwanWorkflowPath);
         
         // Check if branch already exists
         if (preg_match("/^\s+- ['\"]?" . preg_quote($currentBranch, '/') . "['\"]?\s*$/m", $content)) {
-            return false;
+            $result['reason'] = "Branch entry {$currentBranch} already exists";
+            return $result;
         }
         
         $pattern = "/(on:\s+push:\s+branches:.*?)((\n\s+- ['\"][^'\"]+['\"])+)/s";
@@ -75,11 +112,19 @@ class WorkflowService
                 $content
             );
             
-            file_put_contents($this->kiuwanWorkflowPath, $updatedContent);
-            return true;
+            if (file_put_contents($this->kiuwanWorkflowPath, $updatedContent) !== false) {
+                $result['status'] = 'updated';
+                $result['reason'] = '';
+            } else {
+                $result['status'] = 'error';
+                $result['reason'] = 'Write failed';
+            }
+        } else {
+             $result['status'] = 'error';
+             $result['reason'] = 'Pattern mismatch';
         }
         
-        return false;
+        return $result;
     }
     
     /**

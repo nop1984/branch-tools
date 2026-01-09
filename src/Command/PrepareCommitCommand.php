@@ -125,19 +125,28 @@ class PrepareCommitCommand extends Command
             $originBranch = $this->gitService->getOriginBranch($this->currentBranch, $this->detectionMethod, $this->detectionLine);
             $output->writeln("  Origin branch: <info>{$originBranch}</info>");
             $output->writeln("  Detection: {$this->detectionMethod}");
+            $output->writeln("");
             
-            $gizmoUpdated = $this->workflowService->updateGizmoWorkflow($this->currentBranch, $originBranch);
-            $kiuwanUpdated = $this->workflowService->updateKiuwanWorkflow($this->currentBranch);
+            $results = [];
+            $results[] = $this->workflowService->updateGizmoWorkflow($this->currentBranch, $originBranch);
+            $results[] = $this->workflowService->updateKiuwanWorkflow($this->currentBranch);
             
-            if ($gizmoUpdated || $kiuwanUpdated) {
-                $output->writeln("<info>✓ Workflow files updated</info>");
-                $output->writeln("");
-                return true;
-            } else {
-                $output->writeln("<info>✓ Workflow files already up to date</info>");
-                $output->writeln("");
-                return false;
+            $anyUpdated = false;
+            foreach ($results as $result) {
+                if ($result['status'] === 'updated') {
+                    $output->writeln("  <info>✓ {$result['file']}</info> (updated)");
+                    $anyUpdated = true;
+                } elseif ($result['status'] === 'skipped') {
+                    $output->writeln("  <comment>• {$result['file']}</comment> (skipped: {$result['reason']})");
+                } elseif ($result['status'] === 'error') {
+                     $output->writeln("  <error>✗ {$result['file']}</error> (error: {$result['reason']})");
+                }
             }
+            $output->writeln("");
+            $output->writeln("<info>✓ Workflow files update successful</info>");
+            $output->writeln("");
+
+            return $anyUpdated;
             
         } catch (\Exception $e) {
             if (!$autoMode) {
@@ -160,6 +169,11 @@ class PrepareCommitCommand extends Command
             return false;
         }
         
+        // Ensure we have the latest info from remote
+        if ($this->gitService->remoteBranchExists($this->currentBranch)) {
+            $this->gitService->fetchBranch($this->currentBranch);
+        }
+
         // Check remote
         $remoteBuildNumber = $this->gitService->getRemoteBuildTxt($this->currentBranch);
         
@@ -300,12 +314,20 @@ class PrepareCommitCommand extends Command
             $question = new ConfirmationQuestion('  Pull changes from remote? (y/n): ', false);
             
             if ($helper->ask($input, $output, $question)) {
-                passthru("git pull origin {$this->currentBranch}", $returnCode);
+                $output->writeln("  Pulling changes...");
+                
+                // Reset build.txt to HEAD to avoid conflict during pull (since local is behind/invalid)
+                exec("git checkout HEAD -- build.txt 2>/dev/null");
+                
+                // Use passthru to show git output
+                passthru("git pull {$this->gitService->getRemote()} {$this->currentBranch}", $returnCode);
+                
                 if ($returnCode !== 0) {
                     throw new \Exception("Failed to pull changes");
                 }
-                $output->writeln("<info>✓ Changes pulled</info>");
-                $output->writeln("");
+                
+                $output->writeln("<info>✓ Changes pulled successfully</info>");
+                $output->writeln("  Please run the commit again.");
                 return false;
             } else {
                 throw new \Exception("Build number is behind remote. Cannot proceed.");
