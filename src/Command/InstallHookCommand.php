@@ -53,10 +53,21 @@ class InstallHookCommand extends Command
                 }
                 $output->writeln("<info>✓ Created hooks directory</info>");
             }
+
+            // Ask if auto mode should be enabled (non-interactive)
+            $helper = $this->getHelper('question');
+            $question = new \Symfony\Component\Console\Question\ConfirmationQuestion(
+                "\n<question>Enable auto-mode for this hook? (y/n)</question>\n" .
+                "If enabled, upgrades build number automatically without prompts.\n" .
+                "If disabled (default), prompts you to pick build number gaps interactively.\n" .
+                "Auto mode? [y/N]: ", 
+                false
+            );
+            $useAuto = $helper->ask($input, $output, $question);
             
             // Create the pre-commit hook
             $hookPath = $hooksDir . '/pre-commit';
-            $hookContent = $this->generateHookContent($relativePath);
+            $hookContent = $this->generateHookContent($relativePath, $useAuto);
             
             // Check if hook already exists
             if (file_exists($hookPath)) {
@@ -165,8 +176,11 @@ class InstallHookCommand extends Command
         return implode('/', $relativeParts);
     }
     
-    private function generateHookContent($branchToolsRelativePath)
+    private function generateHookContent($branchToolsRelativePath, $useAuto)
     {
+        $autoFlag = $useAuto ? ' --auto' : '';
+        $interactiveSetup = $useAuto ? '' : "\n# Interactive setup for terminal input\nexec < /dev/tty\n";
+
         return <<<HOOK
 #!/bin/bash
 #
@@ -183,9 +197,9 @@ class InstallHookCommand extends Command
 
 # Get the repository root
 REPO_ROOT=\$(git rev-parse --show-toplevel)
-
-# Run the prepare-commit command in auto mode
-"\${REPO_ROOT}/${branchToolsRelativePath}" prepare-commit --auto
+${interactiveSetup}
+# Run the prepare-commit command
+"\${REPO_ROOT}/${branchToolsRelativePath}" prepare-commit${autoFlag}
 
 # Capture exit code
 EXIT_CODE=\$?

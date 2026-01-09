@@ -168,36 +168,58 @@ class PrepareCommitCommand extends Command
             $output->writeln("  Local build: {$localBuildNumber}");
             $output->writeln("");
             
-            // Suggest available build numbers from gaps
-            if (!$autoMode) {
-                $output->writeln("<comment>→ Scanning for available build numbers...</comment>");
-                $buildData = $this->buildNumberService->collectBuildData($output);
+            // Always scan for available build numbers (even in auto mode)
+            $output->writeln("<comment>→ Scanning for available build numbers...</comment>");
+            $buildData = $this->buildNumberService->collectBuildData($output);
+            
+            if (!empty($buildData)) {
+                $suggestions = $this->buildNumberService->suggestBuildNumbers($buildData, $this->currentBranch, $localBuildNumber);
                 
-                if (!empty($buildData)) {
-                    $suggestions = $this->buildNumberService->suggestBuildNumbers($buildData, $this->currentBranch, $localBuildNumber);
+                if (!empty($suggestions)) {
+                    $output->writeln("");
+                    $output->writeln("<info>Available build numbers (gaps):</info>");
                     
-                    if (!empty($suggestions)) {
-                        $output->writeln("");
-                        $output->writeln("<info>Available build numbers (gaps):</info>");
-                        
-                        foreach (array_slice($suggestions, 0, 5) as $idx => $suggestion) {
-                            $output->writeln(sprintf(
-                                "  %d. <info>%d</info> (gap: %d, between %d and %d)",
-                                $idx + 1,
-                                $suggestion['suggested'],
-                                $suggestion['gap'],
-                                $suggestion['after'],
-                                $suggestion['before']
-                            ));
+                    foreach (array_slice($suggestions, 0, 5) as $idx => $suggestion) {
+                        $output->writeln(sprintf(
+                            "  %d. <info>%d</info> (gap: %d, between %d and %d)",
+                            $idx + 1,
+                            $suggestion['suggested'],
+                            $suggestion['gap'],
+                            $suggestion['after'],
+                            $suggestion['before']
+                        ));
+                    }
+                    
+                    $output->writeln("");
+                    
+                    // Extract suggested numbers
+                    $suggestedNumbers = array_column($suggestions, 'suggested');
+                    $newBuildNumber = null;
+
+                    if ($autoMode) {
+                        // Auto-select logic: try suggestions first
+                        foreach ($suggestions as $suggestion) {
+                             $candidate = $suggestion['suggested'];
+                             $takenBranch = $this->buildNumberService->isBuildNumberTaken($candidate, $output);
+                             
+                             if (!$takenBranch) {
+                                 $newBuildNumber = $candidate;
+                                 break;
+                             } else {
+                                 $output->writeln("<comment>Auto-choice {$candidate} taken by {$takenBranch}, trying next...</comment>");
+                             }
                         }
                         
-                        $output->writeln("");
+                        // Fallback to sequential if all suggestions taken
+                        if ($newBuildNumber === null) {
+                             $output->writeln("<comment>All gaps taken. Falling back to sequential.</comment>");
+                             $newBuildNumber = $this->buildNumberService->findNextAvailableBuildNumber($localBuildNumber + 1, $output);
+                        }
                         
-                        // Extract suggested numbers for validation
-                        $suggestedNumbers = array_column($suggestions, 'suggested');
-                        
+                        $output->writeln("<info>✓ Auto-selected build number {$newBuildNumber}</info>");
+                    } else {
+                        // Interactive logic
                         $helper = $this->getHelper('question');
-                        $newBuildNumber = null;
                         
                         // Keep asking until user enters valid number or keeps current
                         while ($newBuildNumber === null) {
@@ -230,27 +252,34 @@ class PrepareCommitCommand extends Command
                             
                             $newBuildNumber = $chosenNumber;
                         }
-                        
-                        if ($newBuildNumber !== $localBuildNumber) {
-                            // Update build.txt
-                            file_put_contents('build.txt', $newBuildNumber);
-                            $output->writeln("<info>✓ Build number updated to {$newBuildNumber}</info>");
-                            $output->writeln("");
-                            return true;
-                        }
-                    } else {
-                        $output->writeln("<comment>No gaps found. Using sequential build number.</comment>");
-                        $newBuildNumber = $this->buildNumberService->findNextAvailableBuildNumber($localBuildNumber + 1, $output);
-                        
-                        $helper = $this->getHelper('question');
-                        $question = new \Symfony\Component\Console\Question\ConfirmationQuestion("  Use build number {$newBuildNumber}? (y/n): ", false);
-                        
-                        if ($helper->ask($input, $output, $question)) {
-                            file_put_contents('build.txt', $newBuildNumber);
-                            $output->writeln("<info>✓ Build number updated to {$newBuildNumber}</info>");
-                            $output->writeln("");
-                            return true;
-                        }
+                    }
+                    
+                    if ($newBuildNumber !== null && $newBuildNumber !== $localBuildNumber) {
+                        // Update build.txt
+                        file_put_contents('build.txt', $newBuildNumber);
+                        $output->writeln("<info>✓ Build number updated to {$newBuildNumber}</info>");
+                        $output->writeln("");
+                        return true;
+                    }
+                } else {
+                    $output->writeln("<comment>No gaps found. Using sequential build number.</comment>");
+                    $newBuildNumber = $this->buildNumberService->findNextAvailableBuildNumber($localBuildNumber + 1, $output);
+                    
+                    if ($autoMode) {
+                        file_put_contents('build.txt', $newBuildNumber);
+                        $output->writeln("<info>✓ Build number updated to {$newBuildNumber}</info>");
+                        $output->writeln("");
+                        return true; 
+                    }
+                    
+                    $helper = $this->getHelper('question');
+                    $question = new \Symfony\Component\Console\Question\ConfirmationQuestion("  Use build number {$newBuildNumber}? (y/n): ", false);
+                    
+                    if ($helper->ask($input, $output, $question)) {
+                        file_put_contents('build.txt', $newBuildNumber);
+                        $output->writeln("<info>✓ Build number updated to {$newBuildNumber}</info>");
+                        $output->writeln("");
+                        return true;
                     }
                 }
             }
