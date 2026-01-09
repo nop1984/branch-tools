@@ -233,7 +233,8 @@ class BuildInfoCommand extends Command
             return;
         }
         
-        $maxBranchLen = max(array_map('strlen', array_column($this->buildData, 'branch')));
+        $branchLengths = array_map('strlen', array_column($this->buildData, 'branch'));
+        $maxBranchLen = !empty($branchLengths) ? max($branchLengths) : 0;
         $maxBranchLen = max($maxBranchLen, strlen('Branch'));
         
         $separator = '+' . str_repeat('-', $maxBranchLen + 2) . '+' . str_repeat('-', 72) . '+';
@@ -242,8 +243,8 @@ class BuildInfoCommand extends Command
         $output->writeln($separator);
         
         foreach ($this->buildData as $data) {
-            $lines = $data['lines'];
-            $branch = $data['branch'];
+            $lines = isset($data['lines']) && is_array($data['lines']) ? $data['lines'] : [];
+            $branch = $data['branch'] ?? '';
             
             $firstLine = !empty($lines) ? $lines[0] : '';
             $output->writeln('| ' . str_pad($branch, $maxBranchLen) . ' | ' . str_pad(substr($firstLine, 0, 70), 70) . " |");

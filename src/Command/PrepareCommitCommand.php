@@ -167,6 +167,95 @@ class PrepareCommitCommand extends Command
             $output->writeln("  No remote build.txt found");
             $output->writeln("  Local build: {$localBuildNumber}");
             $output->writeln("");
+            
+            // Suggest available build numbers from gaps
+            if (!$autoMode) {
+                $output->writeln("<comment>→ Scanning for available build numbers...</comment>");
+                $buildData = $this->buildNumberService->collectBuildData($output);
+                
+                if (!empty($buildData)) {
+                    $suggestions = $this->buildNumberService->suggestBuildNumbers($buildData, $this->currentBranch, $localBuildNumber);
+                    
+                    if (!empty($suggestions)) {
+                        $output->writeln("");
+                        $output->writeln("<info>Available build numbers (gaps):</info>");
+                        
+                        foreach (array_slice($suggestions, 0, 5) as $idx => $suggestion) {
+                            $output->writeln(sprintf(
+                                "  %d. <info>%d</info> (gap: %d, between %d and %d)",
+                                $idx + 1,
+                                $suggestion['suggested'],
+                                $suggestion['gap'],
+                                $suggestion['after'],
+                                $suggestion['before']
+                            ));
+                        }
+                        
+                        $output->writeln("");
+                        
+                        // Extract suggested numbers for validation
+                        $suggestedNumbers = array_column($suggestions, 'suggested');
+                        
+                        $helper = $this->getHelper('question');
+                        $newBuildNumber = null;
+                        
+                        // Keep asking until user enters valid number or keeps current
+                        while ($newBuildNumber === null) {
+                            $question = new \Symfony\Component\Console\Question\Question("  Enter build number to claim (or press Enter to keep {$localBuildNumber}): ", $localBuildNumber);
+                            
+                            $answer = $helper->ask($input, $output, $question);
+                            $chosenNumber = (int)$answer;
+                            
+                            // If user keeps current number, break
+                            if ($chosenNumber === $localBuildNumber) {
+                                $newBuildNumber = $localBuildNumber;
+                                break;
+                            }
+                            
+                            // Validate that chosen number is from suggested list
+                            if (!in_array($chosenNumber, $suggestedNumbers)) {
+                                $output->writeln("<error>✗ Build number {$chosenNumber} is not in the suggested list. Please choose from the suggested gaps.</error>");
+                                $output->writeln("");
+                                continue;
+                            }
+                            
+                            // Double-check if the number is still available
+                            $takenBranch = $this->buildNumberService->isBuildNumberTaken($chosenNumber, $output);
+                            
+                            if ($takenBranch) {
+                                $output->writeln("<error>✗ Build number {$chosenNumber} is already taken by {$takenBranch}</error>");
+                                $output->writeln("");
+                                continue;
+                            }
+                            
+                            $newBuildNumber = $chosenNumber;
+                        }
+                        
+                        if ($newBuildNumber !== $localBuildNumber) {
+                            // Update build.txt
+                            file_put_contents('build.txt', $newBuildNumber);
+                            $output->writeln("<info>✓ Build number updated to {$newBuildNumber}</info>");
+                            $output->writeln("");
+                            return true;
+                        }
+                    } else {
+                        $output->writeln("<comment>No gaps found. Using sequential build number.</comment>");
+                        $newBuildNumber = $this->buildNumberService->findNextAvailableBuildNumber($localBuildNumber + 1, $output);
+                        
+                        $helper = $this->getHelper('question');
+                        $question = new \Symfony\Component\Console\Question\ConfirmationQuestion("  Use build number {$newBuildNumber}? (y/n): ", false);
+                        
+                        if ($helper->ask($input, $output, $question)) {
+                            file_put_contents('build.txt', $newBuildNumber);
+                            $output->writeln("<info>✓ Build number updated to {$newBuildNumber}</info>");
+                            $output->writeln("");
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            $output->writeln("");
             return false;
         }
         
