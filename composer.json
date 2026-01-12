@@ -7,7 +7,13 @@
         {
             "name": "Mykola Dolynskyi aka nop1984",
             "email": "gospodin.p.zh@gmail.com",
-            "homepage": "https://github.com/nop1984"
+            "homepage": "https://github.com/nop1984",
+            "role": "Developer"
+        },
+        {
+            "name": "Roman Feoktistov",
+            "email": "roman.feoktistov@agileengine.com",
+            "role": "Tester"
         }
     ],
     "require": {

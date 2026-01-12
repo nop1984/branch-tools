@@ -511,3 +511,9 @@ git commit --no-verify -m "Emergency fix"
 ```bash
 git show origin/develop:build.txt > build.txt
 ```
+
+## Credits
+
+**Developer:** Mykola Dolynskyi (nop1984)  
+**Tester:** Roman Feoktistov  
+**Organization:** AgileEngine
