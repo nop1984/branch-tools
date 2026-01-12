@@ -103,6 +103,42 @@ class BuildInfoCommand extends Command
         }
     }
     
+    /**
+     * Calculate neighbors for each build number
+     * Returns array with 'left' and 'right' neighbors and gaps
+     */
+    private function calculateNeighbors()
+    {
+        $buildNumbers = [];
+        $buildToBranch = [];
+        
+        // buildData is [branch => buildNumber]
+        foreach ($this->buildData as $branch => $buildNum) {
+            $buildNumbers[$buildNum] = $branch;
+            $buildToBranch[$buildNum] = $branch;
+        }
+        
+        ksort($buildNumbers);
+        $sorted = array_keys($buildNumbers);
+        $neighbors = [];
+        
+        foreach ($sorted as $index => $buildNum) {
+            $left = $index > 0 ? $sorted[$index - 1] : null;
+            $right = $index < count($sorted) - 1 ? $sorted[$index + 1] : null;
+            
+            $neighbors[$buildNum] = [
+                'left' => $left,
+                'left_branch' => $left ? $buildNumbers[$left] : null,
+                'left_gap' => $left ? ($buildNum - $left) : null,
+                'right' => $right,
+                'right_branch' => $right ? $buildNumbers[$right] : null,
+                'right_gap' => $right ? ($right - $buildNum) : null,
+            ];
+        }
+        
+        return $neighbors;
+    }
+    
     private function checkLocalVsRemoteBuild(InputInterface $input, OutputInterface $output)
     {
         $currentBranch = $this->gitService->getCurrentBranch();
@@ -233,25 +269,33 @@ class BuildInfoCommand extends Command
             return;
         }
         
-        $branchLengths = array_map('strlen', array_column($this->buildData, 'branch'));
+        $neighbors = $this->calculateNeighbors();
+        
+        // buildData is [branch => buildNumber]
+        $branchLengths = array_map('strlen', array_keys($this->buildData));
         $maxBranchLen = !empty($branchLengths) ? max($branchLengths) : 0;
         $maxBranchLen = max($maxBranchLen, strlen('Branch'));
         
-        $separator = '+' . str_repeat('-', $maxBranchLen + 2) . '+' . str_repeat('-', 72) . '+';
+        $separator = '+' . str_repeat('-', $maxBranchLen + 2) . '+' . str_repeat('-', 12) . '+' . str_repeat('-', 25) . '+' . str_repeat('-', 25) . '+';
         $output->writeln($separator);
-        $output->writeln('| ' . str_pad('Branch', $maxBranchLen) . ' | ' . str_pad('Content', 70) . " |");
+        $output->writeln('| ' . str_pad('Branch', $maxBranchLen) . ' | ' . str_pad('Build', 10) . ' | ' . str_pad('Left Neighbor', 23) . ' | ' . str_pad('Right Neighbor', 23) . " |");
         $output->writeln($separator);
         
-        foreach ($this->buildData as $data) {
-            $lines = isset($data['lines']) && is_array($data['lines']) ? $data['lines'] : [];
-            $branch = $data['branch'] ?? '';
+        foreach ($this->buildData as $branch => $buildNum) {
+            $leftInfo = 'N/A';
+            $rightInfo = 'N/A';
             
-            $firstLine = !empty($lines) ? $lines[0] : '';
-            $output->writeln('| ' . str_pad($branch, $maxBranchLen) . ' | ' . str_pad(substr($firstLine, 0, 70), 70) . " |");
-            
-            for ($i = 1; $i < count($lines); $i++) {
-                $output->writeln('| ' . str_repeat(' ', $maxBranchLen) . ' | ' . str_pad(substr($lines[$i], 0, 70), 70) . " |");
+            if (isset($neighbors[$buildNum])) {
+                $n = $neighbors[$buildNum];
+                if ($n['left'] !== null) {
+                    $leftInfo = $n['left'] . ' (-' . $n['left_gap'] . ')';
+                }
+                if ($n['right'] !== null) {
+                    $rightInfo = $n['right'] . ' (+' . $n['right_gap'] . ')';
+                }
             }
+            
+            $output->writeln('| ' . str_pad($branch, $maxBranchLen) . ' | ' . str_pad($buildNum, 10) . ' | ' . str_pad($leftInfo, 23) . ' | ' . str_pad($rightInfo, 23) . " |");
         }
         
         $output->writeln($separator);
@@ -259,12 +303,37 @@ class BuildInfoCommand extends Command
     
     private function outputJson(OutputInterface $output)
     {
+        $neighbors = $this->calculateNeighbors();
         $jsonData = [];
-        foreach ($this->buildData as $data) {
-            $jsonData[] = [
-                'branch' => $data['branch'],
-                'content' => $data['content']
+        
+        // buildData is [branch => buildNumber]
+        foreach ($this->buildData as $branch => $buildNum) {
+            $item = [
+                'branch' => $branch,
+                'build_number' => $buildNum,
+                'left_neighbor' => null,
+                'right_neighbor' => null,
             ];
+            
+            if (isset($neighbors[$buildNum])) {
+                $n = $neighbors[$buildNum];
+                if ($n['left'] !== null) {
+                    $item['left_neighbor'] = [
+                        'build_number' => $n['left'],
+                        'branch' => $n['left_branch'],
+                        'gap' => $n['left_gap']
+                    ];
+                }
+                if ($n['right'] !== null) {
+                    $item['right_neighbor'] = [
+                        'build_number' => $n['right'],
+                        'branch' => $n['right_branch'],
+                        'gap' => $n['right_gap']
+                    ];
+                }
+            }
+            
+            $jsonData[] = $item;
         }
         
         $output->writeln(json_encode($jsonData, JSON_PRETTY_PRINT));
@@ -272,19 +341,57 @@ class BuildInfoCommand extends Command
     
     private function outputCsv(OutputInterface $output)
     {
-        $output->writeln("Branch,Content");
-        foreach ($this->buildData as $data) {
-            $content = str_replace('"', '""', str_replace("\n", ' ', $data['content']));
-            $output->writeln('"' . $data['branch'] . '","' . $content . '"');
+        $neighbors = $this->calculateNeighbors();
+        $output->writeln("Branch,Build Number,Left Neighbor,Left Gap,Right Neighbor,Right Gap");
+        
+        // buildData is [branch => buildNumber]
+        foreach ($this->buildData as $branch => $buildNum) {
+            $leftNeighbor = 'N/A';
+            $leftGap = 'N/A';
+            $rightNeighbor = 'N/A';
+            $rightGap = 'N/A';
+            
+            if (isset($neighbors[$buildNum])) {
+                $n = $neighbors[$buildNum];
+                if ($n['left'] !== null) {
+                    $leftNeighbor = $n['left'];
+                    $leftGap = $n['left_gap'];
+                }
+                if ($n['right'] !== null) {
+                    $rightNeighbor = $n['right'];
+                    $rightGap = $n['right_gap'];
+                }
+            }
+            
+            $output->writeln('"' . $branch . '",' . $buildNum . ',' . $leftNeighbor . ',' . $leftGap . ',' . $rightNeighbor . ',' . $rightGap);
         }
     }
     
     private function outputList(OutputInterface $output)
     {
-        foreach ($this->buildData as $data) {
-            $output->writeln("Branch: {$data['branch']}");
+        $neighbors = $this->calculateNeighbors();
+        
+        // buildData is [branch => buildNumber]
+        foreach ($this->buildData as $branch => $buildNum) {
+            $output->writeln("Branch: {$branch}");
             $output->writeln(str_repeat('-', 70));
-            $output->writeln($data['content']);
+            $output->writeln("Build Number: {$buildNum}");
+            
+            if (isset($neighbors[$buildNum])) {
+                $n = $neighbors[$buildNum];
+                if ($n['left'] !== null) {
+                    $output->writeln("Left Neighbor: {$n['left']} (branch: {$n['left_branch']}, gap: {$n['left_gap']})");
+                } else {
+                    $output->writeln("Left Neighbor: N/A");
+                }
+                
+                if ($n['right'] !== null) {
+                    $output->writeln("Right Neighbor: {$n['right']} (branch: {$n['right_branch']}, gap: {$n['right_gap']})");
+                } else {
+                    $output->writeln("Right Neighbor: N/A");
+                }
+            }
+            
             $output->writeln("");
         }
     }
@@ -298,19 +405,19 @@ class BuildInfoCommand extends Command
         
         $buildNumbers = [];
         $buildToBranch = [];
-        foreach ($this->buildData as $data) {
-            $buildNum = (int)trim($data['content']);
+        foreach ($this->buildData as $branch => $buildNum) {
+            $buildNum = (int)trim($buildNum);
             $buildNumbers[] = $buildNum;
             if (!isset($buildToBranch[$buildNum])) {
-                $buildToBranch[$buildNum] = $data['branch'];
+                $buildToBranch[$buildNum] = $branch;
             }
         }
         sort($buildNumbers);
         
-        $currentBranch = $this->getCurrentBranch();
+        $currentBranch = $this->gitService->getCurrentBranch();
         $currentBranchBuildNumber = null;
         if ($currentBranch && isset($this->buildData[$currentBranch])) {
-            $currentBranchBuildNumber = (int)trim($this->buildData[$currentBranch]['content']);
+            $currentBranchBuildNumber = (int)trim($this->buildData[$currentBranch]);
         }
         
         $output->writeln("=== Available Build Number Suggestions ===");

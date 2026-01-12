@@ -115,6 +115,7 @@ class BuildNumberService
     
     /**
      * Suggest available build numbers with gaps
+     * Ensures suggested number has at least $minGap free spaces on both sides
      */
     public function suggestBuildNumbers(array $buildData, $currentBranch, $currentBuild, $minGap = 20)
     {
@@ -124,21 +125,29 @@ class BuildNumberService
         $sortedBuilds = array_values($buildData);
         sort($sortedBuilds);
         
-        // Find gaps
+        // Find gaps - total gap must be at least 2*minGap to ensure minGap on both sides
+        $requiredTotalGap = $minGap * 2;
+        
         for ($i = 0; $i < count($sortedBuilds) - 1; $i++) {
             $current = $sortedBuilds[$i];
             $next = $sortedBuilds[$i + 1];
             $gap = $next - $current;
             
-            if ($gap >= $minGap) {
-                $suggestions[] = [
-                    'suggested' => $current + (int)($gap / 2),
-                    'after' => $current,
-                    'before' => $next,
-                    'gap' => $gap,
-                    'after_branch' => array_search($current, $buildData),
-                    'before_branch' => array_search($next, $buildData),
-                ];
+            if ($gap > $requiredTotalGap) {
+                // Suggest the middle, ensuring at least minGap on both sides
+                $suggested = $current + (int)($gap / 2);
+                
+                // Double-check that suggested has minGap on both sides
+                if (($suggested - $current) >= $minGap && ($next - $suggested) >= $minGap) {
+                    $suggestions[] = [
+                        'suggested' => $suggested,
+                        'after' => $current,
+                        'before' => $next,
+                        'gap' => $gap,
+                        'after_branch' => array_search($current, $buildData),
+                        'before_branch' => array_search($next, $buildData),
+                    ];
+                }
             }
         }
         

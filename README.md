@@ -197,6 +197,76 @@ This command:
 3. Updates set-gizmo-branch-var.yml with a new case entry
 4. Updates ci-build-with-kiuwan-analysis.yml branches list
 
+### Self-Update (`self-update`)
+
+Automatically check for and install the latest version of branch-tools from GitHub releases.
+
+**Usage:**
+```bash
+# Check for available updates
+./branch-tools self-update --check
+
+# Install the latest version
+./branch-tools self-update
+
+# Force update (skip confirmation)
+./branch-tools self-update --force
+
+# Simulate update without installing
+./branch-tools self-update --dry-run
+```
+
+**What it does:**
+1. Queries GitHub API for the latest release
+2. Compares with current version
+3. Downloads and installs new version if available
+4. Runs `composer install` to update dependencies
+5. Creates automatic backup of current installation
+6. Restores backup if update fails
+
+**Options:**
+- `--check, -c`: Only check for updates without installing
+- `--force, -f`: Skip confirmation prompt
+- `--dry-run`: Simulate the update without making changes
+
+**Features:**
+- Automatic version detection
+- Safe update with automatic rollback on failure
+- Release notes display
+- Backup creation before update
+- Dependency management included
+
+**Example output:**
+```
+Branch Tools Self-Update
+Current version: 1.0.0
+
+Checking for updates...
+
+Update Available
+================
+New version: 1.1.0
+Current version: 1.0.0
+Release URL: https://github.com/nop1984/branch-tools/releases/tag/v1.1.0
+Published: 2026-01-15 10:30:00
+
+Release Notes
+=============
+- Added self-update feature
+- Improved error handling
+- Bug fixes
+
+Do you want to update to version 1.1.0? (yes/no) [yes]:
+> yes
+
+Installing Update
+=================
+Downloading version v1.1.0...
+
+[OK] Successfully updated to version 1.1.0!
+     Please verify the installation with: ./branch-tools --version
+```
+
 ## Features
 
 ### Build Info Features
@@ -484,6 +554,50 @@ This ensures your build number won't conflict with:
 - Existing branches
 - Recently merged branches still in CI
 - Branches being worked on by other developers
+
+## Development
+
+### Running Tests
+
+The project includes comprehensive unit tests for all output formats and features.
+
+**Install development dependencies:**
+```bash
+composer install
+```
+
+**Run all tests:**
+```bash
+composer test
+# or
+./vendor/bin/phpunit
+```
+
+**Run tests with coverage:**
+```bash
+composer test-coverage
+# Coverage report will be in coverage/index.html
+```
+
+**Run specific test:**
+```bash
+./vendor/bin/phpunit --filter testTableOutputFormat
+```
+
+**Test structure:**
+- `tests/Command/BuildInfoCommandTest.php` - Tests for all output formats (table, json, csv, list, suggest)
+- Tests verify neighbor calculation, gap detection, and edge cases
+- Integration tests require a valid git repository environment
+
+**What's tested:**
+- ✅ Table output format with neighbor information
+- ✅ JSON output format structure and neighbor data
+- ✅ CSV output format with all columns
+- ✅ List output format with detailed neighbor info
+- ✅ Suggest output format with gap validation
+- ✅ Neighbor calculation edge cases (first/last items)
+- ✅ Gap minimum validation (20 spaces on each side)
+- ✅ Empty neighbor handling (N/A display)
 
 ## Troubleshooting
 

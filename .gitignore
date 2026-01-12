@@ -30,9 +30,10 @@ logs/
 *.bak
 *~
 
-# Test coverage
+# Test coverage and PHPUnit cache
 coverage/
 .phpunit.result.cache
+.phpunit.cache/
 
 # Environment files (if any)
 .env
