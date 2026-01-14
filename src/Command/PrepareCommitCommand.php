@@ -314,21 +314,7 @@ class PrepareCommitCommand extends Command
             $question = new ConfirmationQuestion('  Pull changes from remote? (y/n): ', false);
             
             if ($helper->ask($input, $output, $question)) {
-                $output->writeln("  Pulling changes...");
-                
-                // Reset build.txt to HEAD to avoid conflict during pull (since local is behind/invalid)
-                exec("git checkout HEAD -- build.txt 2>/dev/null");
-                
-                // Use passthru to show git output
-                passthru("git pull {$this->gitService->getRemote()} {$this->currentBranch}", $returnCode);
-                
-                if ($returnCode !== 0) {
-                    throw new \Exception("Failed to pull changes");
-                }
-                
-                $output->writeln("<info>✓ Changes pulled successfully</info>");
-                $output->writeln("  Please run the commit again.");
-                return false;
+                return $this->pullAndScheduleCommit($output);
             } else {
                 throw new \Exception("Build number is behind remote. Cannot proceed.");
             }
@@ -388,5 +374,47 @@ class PrepareCommitCommand extends Command
         $output->writeln("");
         
         return true;
+    }
+    
+    /**
+     * Pull changes from remote and schedule the same commit command to run again asynchronously.
+     * This approach follows DRY principle similar to pre-push hook's trigger-build command.
+     * 
+     * @param OutputInterface $output
+     * @return bool Always returns false to cancel the current commit
+     */
+    private function pullAndScheduleCommit(OutputInterface $output): bool
+    {
+        $output->writeln("  Pulling changes...");
+        
+        // Reset build.txt to HEAD to avoid conflict during pull (since local is behind/invalid)
+        exec("git checkout HEAD -- build.txt 2>/dev/null");
+        
+        // Get repository root for the scheduled command
+        $repoRoot = $this->gitService->validateAndGetRepoRoot(getcwd(), $output);
+        
+        // Use passthru to show git output and wait for completion
+        passthru("git pull {$this->gitService->getRemote()} {$this->currentBranch}", $returnCode);
+        
+        if ($returnCode !== 0) {
+            throw new \Exception("Failed to pull changes");
+        }
+        
+        $output->writeln("<info>✓ Changes pulled successfully</info>");
+        $output->writeln("  Scheduling commit to run again...");
+        
+        // Schedule the commit to run after the hook exits (background process)
+        // This allows the current commit to be cancelled cleanly
+        $gitCommitCmd = 'git -C ' . escapeshellarg($repoRoot) . ' commit';
+        GitService::scheduleAsyncCommand($gitCommitCmd, 'Commit completed!', 1);
+        
+        $output->writeln("");
+        $output->writeln("<info>✓ Automatic commit scheduled!</info>");
+        $output->writeln("<comment>  Note: The current commit will be cancelled to allow the pull to complete.</comment>");
+        $output->writeln("<comment>  The commit will execute automatically in a moment...</comment>");
+        $output->writeln("");
+        
+        // Return false to cancel the current commit (this is intentional)
+        return false;
     }
 }

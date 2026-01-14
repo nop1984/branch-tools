@@ -168,24 +168,15 @@ class TriggerBuildCommand extends Command
         // Schedule push to run after hook exits (background process)
         $io->text('Scheduling automatic push...');
         
-        // Cross-platform background push
-        $sleepTime = 1; // seconds
         $gitPushCmd = 'git -C ' . escapeshellarg($this->repoPath) . ' push';
-        $successMessage = 'Push completed! You still have to create MR/PR manually';
+        GitService::scheduleAsyncCommand($gitPushCmd, 'Push completed! You still have to create MR/PR manually', 1);
         
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            // Windows: use start command with /B for background
-            $cmd = 'start /B cmd /c "timeout /T ' . $sleepTime . ' /NOBREAK > NUL && ' . $gitPushCmd . ' && echo. && echo ' . escapeshellarg($successMessage) . ' && pause"';
-            pclose(popen($cmd, 'r'));
-        } else {
-            // Unix/Linux/Mac: use sleep and background process
-            $cmd = '(sleep ' . $sleepTime . ' && ' . $gitPushCmd . ' && echo "" && echo ' . escapeshellarg($successMessage) . ') > /dev/null 2>&1 &';
-            exec($cmd);
-        }
+        $io->newLine();
+        $io->success('Automatic push scheduled!');
+        $io->text('<comment>Note: The current push will be cancelled to allow the trigger commit to be pushed.</comment>');
+        $io->text('<comment>The push will execute automatically in a moment...</comment>');
         
-        $io->success('Push will run automatically in a moment!');
-        
-        // Return FAILURE to abort the original push
+        // Return FAILURE to abort the original push (this is intentional)
         return Command::FAILURE;
     }
 }

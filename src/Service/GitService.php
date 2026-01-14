@@ -421,4 +421,34 @@ class GitService
         
         throw new \Exception("Unable to determine origin branch for '{$currentBranch}'");
     }
+    
+    /**
+     * Schedule a command to run asynchronously after a delay.
+     * Works cross-platform (Windows and Unix/Linux/Mac).
+     * 
+     * @param string $command The command to execute
+     * @param string $successMessage Optional message to display after command completes
+     * @param int $sleepTime Delay in seconds before executing command (default: 1)
+     * @return void
+     */
+    public static function scheduleAsyncCommand(string $command, string $successMessage = '', int $sleepTime = 1): void
+    {
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            // Windows: use start command with /B for background
+            $cmd = 'start /B cmd /c "timeout /T ' . $sleepTime . ' /NOBREAK > NUL && ' . $command;
+            if ($successMessage) {
+                $cmd .= ' && echo. && echo ' . escapeshellarg($successMessage) . ' && pause';
+            }
+            $cmd .= '"';
+            pclose(popen($cmd, 'r'));
+        } else {
+            // Unix/Linux/Mac: use sleep and background process
+            $cmd = '(sleep ' . $sleepTime . ' && ' . $command;
+            if ($successMessage) {
+                $cmd .= ' && echo "" && echo ' . escapeshellarg($successMessage);
+            }
+            $cmd .= ') > /dev/null 2>&1 &';
+            exec($cmd);
+        }
+    }
 }
