@@ -20,6 +20,9 @@ class TriggerBuildCommand extends Command
     protected static $defaultName = 'trigger-build';
     protected static $defaultDescription = 'Optionally trigger CI/CD build with an empty commit before push';
     
+    // Constant for the trigger build commit message
+    public const TRIGGER_BUILD_MESSAGE = '[ci_build] Trigger build';
+    
     private $gitService;
     private $repoPath;
     
@@ -143,7 +146,7 @@ class TriggerBuildCommand extends Command
         $lastMessage = trim(implode("\n", $output));
         
         // Check if last commit is already a trigger commit
-        return strpos($lastMessage, '[ci_build]') !== false;
+        return strpos($lastMessage, self::TRIGGER_BUILD_MESSAGE) !== false;
     }
     
     /**
@@ -153,7 +156,7 @@ class TriggerBuildCommand extends Command
     {
         $io->text('Creating trigger commit...');
         
-        exec('git -C ' . escapeshellarg($this->repoPath) . ' commit --allow-empty -m "[ci_build] Trigger build" 2>&1', $output, $returnCode);
+        exec('git -C ' . escapeshellarg($this->repoPath) . ' commit --allow-empty -m ' . escapeshellarg(self::TRIGGER_BUILD_MESSAGE) . ' 2>&1', $output, $returnCode);
         
         if ($returnCode !== 0) {
             $io->error('Failed to create trigger commit: ' . implode("\n", $output));
@@ -162,22 +165,23 @@ class TriggerBuildCommand extends Command
         
         $io->success([
             'CI/CD trigger commit created!',
-            'Commit message: [ci_build] Trigger build',
+            'Commit message: ' . self::TRIGGER_BUILD_MESSAGE,
         ]);
         
         // Schedule push to run after hook exits (background process)
         $io->text('Scheduling automatic push...');
         
         // Build push command with upstream if needed
+        // Use --no-verify to skip pre-push hook since we already created the trigger commit
         $currentBranch = exec('git -C ' . escapeshellarg($this->repoPath) . ' rev-parse --abbrev-ref HEAD 2>&1');
         $hasUpstream = exec('git -C ' . escapeshellarg($this->repoPath) . ' rev-parse --abbrev-ref @{upstream} 2>&1', $output, $returnCode);
         
         if ($returnCode !== 0) {
             // No upstream, set it
-            $gitPushCmd = 'git -C ' . escapeshellarg($this->repoPath) . ' push --set-upstream origin ' . escapeshellarg($currentBranch);
+            $gitPushCmd = 'git -C ' . escapeshellarg($this->repoPath) . ' push --no-verify --set-upstream origin ' . escapeshellarg($currentBranch);
         } else {
             // Has upstream, just push
-            $gitPushCmd = 'git -C ' . escapeshellarg($this->repoPath) . ' push';
+            $gitPushCmd = 'git -C ' . escapeshellarg($this->repoPath) . ' push --no-verify';
         }
         
         GitService::scheduleAsyncCommand($gitPushCmd, 'Push completed! You still have to create MR/PR manually', 1);

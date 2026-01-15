@@ -30,6 +30,7 @@ use TestrailTools\Command\PrepareCommitCommand;
 use TestrailTools\Command\InstallHookCommand;
 use TestrailTools\Command\SelfUpdateCommand;
 use TestrailTools\Command\TriggerBuildCommand;
+use TestrailTools\Command\CleanupBranchCommand;
 use TestrailTools\Service\AutoUpdateChecker;
 
 $application = new Application('Branch Tools', '1.1.0');
@@ -41,6 +42,7 @@ $application->add(new PrepareCommitCommand());
 $application->add(new InstallHookCommand());
 $application->add(new SelfUpdateCommand());
 $application->add(new TriggerBuildCommand());
+$application->add(new CleanupBranchCommand());
 
 // Check for updates before running any command (except self-update itself)
 $input = new ArgvInput();

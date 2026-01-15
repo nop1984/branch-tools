@@ -3,6 +3,7 @@
 namespace TestrailTools\Service;
 
 use Symfony\Component\Console\Output\OutputInterface;
+use TestrailTools\Command\TriggerBuildCommand;
 
 /**
  * Service for Git operations
@@ -420,6 +421,128 @@ class GitService
         }
         
         throw new \Exception("Unable to determine origin branch for '{$currentBranch}'");
+    }
+    
+    /**
+     * Check if there are real file changes since last [Trigger build] commit on remote.
+     * Ignores [Trigger build] commits that originated from parent branch.
+     * Compares local HEAD against remote branch.
+     * 
+     * @param string|null $branch Branch to check (defaults to current branch)
+     * @param OutputInterface|null $output Optional output for debugging
+     * @return bool True if there are real changes, false otherwise
+     */
+    public function hasRealChangesSinceLastTriggerBuild($branch = null, ?OutputInterface $output = null)
+    {
+        if ($branch === null) {
+            $branch = $this->getCurrentBranch();
+        }
+        
+        // Ensure we have latest remote data
+        exec("git fetch {$this->remote} {$branch} 2>&1", $fetchOutput, $fetchCode);
+        if ($fetchCode !== 0) {
+            // If fetch fails, assume there are changes to be safe
+            if ($output) {
+                $output->writeln("  <comment>Could not fetch remote - assuming changes exist</comment>");
+            }
+            return true;
+        }
+        
+        $remoteBranch = "{$this->remote}/{$branch}";
+        
+        // Get the parent branch
+        try {
+            $parentBranch = $this->getOriginBranch($branch);
+        } catch (\Exception $e) {
+            // If we can't determine parent, assume there are changes
+            if ($output) {
+                $output->writeln("  <comment>Could not determine parent branch - assuming changes exist</comment>");
+            }
+            return true;
+        }
+        
+        // Get all commits on remote branch
+        // Format: <commit-hash>|<commit-message>
+        $logCmd = "git log {$remoteBranch} --pretty=format:'%H|%s' 2>&1";
+        exec($logCmd, $logOutput, $logCode);
+        
+        if ($logCode !== 0 || empty($logOutput)) {
+            // No commits or error - assume changes exist
+            if ($output) {
+                $output->writeln("  <comment>Could not get remote log - assuming changes exist</comment>");
+            }
+            return true;
+        }
+        
+        // Find the last [Trigger build] commit that's NOT from parent branch
+        $lastTriggerBuildCommit = null;
+        
+        foreach ($logOutput as $line) {
+            $parts = explode('|', $line, 2);
+            if (count($parts) !== 2) {
+                continue;
+            }
+            
+            $commitHash = $parts[0];
+            $commitMessage = $parts[1];
+            
+            // Check if this is a [Trigger build] commit
+            if (strpos($commitMessage, TriggerBuildCommand::TRIGGER_BUILD_MESSAGE) === false) {
+                continue;
+            }
+            
+            // Check if this commit exists in parent branch (meaning it came from parent)
+            $checkParentCmd = "git merge-base --is-ancestor {$commitHash} {$this->remote}/{$parentBranch} 2>&1";
+            exec($checkParentCmd, $checkOutput, $checkCode);
+            
+            // exit code 0 = is ancestor (from parent), 1 = not ancestor (from this branch)
+            if ($checkCode === 1) {
+                // This [Trigger build] is NOT from parent - it's ours!
+                $lastTriggerBuildCommit = $commitHash;
+                if ($output) {
+                    $output->writeln("  <comment>Found last [Trigger build] on this branch: {$commitHash}</comment>");
+                }
+                break;
+            }
+        }
+        
+        if ($lastTriggerBuildCommit === null) {
+            // No [Trigger build] commit found on this branch - assume changes exist
+            if ($output) {
+                $output->writeln("  <comment>No [Trigger build] commits on this branch - assuming changes exist</comment>");
+            }
+            return true;
+        }
+        
+        // Check if there are file changes between last trigger build and current local HEAD
+        // We compare local HEAD vs the remote's last trigger build commit
+        $diffCmd = "git diff --name-only {$lastTriggerBuildCommit}..HEAD 2>&1";
+        exec($diffCmd, $diffOutput, $diffCode);
+        
+        if ($diffCode !== 0) {
+            // Error checking - assume changes exist
+            if ($output) {
+                $output->writeln("  <comment>Error checking diff - assuming changes exist</comment>");
+            }
+            return true;
+        }
+        
+        // Count real file changes (exclude empty lines)
+        $changedFiles = array_filter($diffOutput, function($line) {
+            return !empty(trim($line));
+        });
+        
+        $hasChanges = !empty($changedFiles);
+        
+        if ($output) {
+            if ($hasChanges) {
+                $output->writeln("  <info>Found " . count($changedFiles) . " changed file(s) since last [Trigger build]</info>");
+            } else {
+                $output->writeln("  <comment>No file changes since last [Trigger build]</comment>");
+            }
+        }
+        
+        return $hasChanges;
     }
     
     /**

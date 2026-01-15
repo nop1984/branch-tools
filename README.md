@@ -81,7 +81,7 @@ All commands automatically detect the target repository by recursively searching
 
 ### Install Hook (`install-hook`)
 
-**Quick setup** - Installs the pre-commit hook in your repository.
+**Quick setup** - Installs the pre-commit and pre-push hooks in your repository.
 
 **Usage:**
 ```bash
@@ -93,10 +93,13 @@ All commands automatically detect the target repository by recursively searching
 ```
 
 **What it does:**
-1. Creates `.git/hooks/pre-commit` file
-2. Configures it to run `prepare-commit --auto` before each commit
-3. Makes the hook executable
-4. Backs up any existing hook
+1. Creates `.git/hooks/pre-commit` and `.git/hooks/pre-push` files
+2. Writes branch-tools executable path to `.git/branch-tools-path` config file
+3. Configures pre-commit to run `prepare-commit` before each commit
+4. Configures pre-push to run `trigger-build` before each push
+5. Makes hooks executable
+6. Backs up any existing hooks
+7. **Adds monitoring logic** - Hooks wait up to 5 seconds for background operations and display results
 
 **To uninstall:**
 ```bash
@@ -107,6 +110,34 @@ rm .git/hooks/pre-commit
 ```bash
 git commit --no-verify
 ```
+
+### Cleanup Branch (`cleanup-branch`)
+
+**Pre-merge preparation** - Restores workflow files and build.txt to parent branch state before merging.
+
+**Usage:**
+```bash
+# Restore files for current branch
+./branch-tools cleanup-branch
+
+# Specify repository path
+./branch-tools cleanup-branch /path/to/repo
+```
+
+**What it does:**
+1. Detects the parent branch (develop, main, master, etc.)
+2. Compares workflow YAML files and build.txt with parent branch
+3. Restores modified files to parent branch state
+4. Creates commit with restored files (if changes detected)
+5. Pushes changes automatically
+
+**Use case:**
+Before merging a feature branch, run this command to clean up branch-specific modifications:
+- Removes your branch from CI workflow triggers
+- Removes branch mapping from set-gizmo-branch-var.yml
+- Restores build.txt to parent branch value
+
+This ensures the parent branch remains clean after merge.
 
 ### Prepare Commit (`prepare-commit`)
 
@@ -131,10 +162,14 @@ git commit --no-verify
 **What it does:**
 1. **Checks for staged changes** - Skips all updates if commit is empty
 2. Updates workflow YAML files if on feature branch (skips main branches)
-3. Validates and updates build.txt if needed
-4. Double-checks build numbers against all remote branches
-5. Suggests alternatives if chosen number is taken
-6. Returns exit code 0 for success, 1 for failure (suitable for hooks)
+3. **Intelligently validates build numbers:**
+   - If local build ≤ remote build, checks for real file changes since last `[ci_build] Trigger build` commit
+   - Only prompts for increment if real changes detected (defaults to YES)
+   - Skips increment entirely if no real changes found
+4. **Pull-and-retry mechanism** - If local build is behind remote, automatically pulls changes with rebase and retries commit in background
+5. Double-checks build numbers against all remote branches
+6. Suggests alternatives if chosen number is taken
+7. Returns exit code 0 for success, 1 for failure (suitable for hooks)
 
 **Options:**
 - `--auto, -a`: Auto mode - auto-increment build and update workflows without prompts
@@ -196,6 +231,39 @@ This command:
 2. Determines which branch it originated from using git reflog
 3. Updates set-gizmo-branch-var.yml with a new case entry
 4. Updates ci-build-with-kiuwan-analysis.yml branches list
+
+### Trigger Build (`trigger-build`)
+
+**Pre-push hook** - Optionally trigger CI/CD build before pushing commits.
+
+**Usage:**
+```bash
+# Interactive mode (asks if you want to trigger build)
+./branch-tools trigger-build
+
+# Auto mode (automatically triggers without prompting)
+./branch-tools trigger-build --auto
+
+# Skip entirely
+./branch-tools trigger-build --skip
+```
+
+**What it does:**
+1. Asks if you want to trigger a CI/CD build
+2. Creates an empty commit with message `[ci_build] Trigger build`
+3. Automatically pushes commits in background after hook exits
+4. Detects upstream branch and sets it if needed (for first push)
+5. Monitors background push and displays results
+
+**Smart behavior:**
+- Skips if last commit is already a trigger build
+- Uses `--no-verify` for background push to avoid recursive hooks
+- Shows reminder message about cleanup-branch command
+- Logs output to `/tmp/git-async-*.log` for debugging
+
+**Options:**
+- `--auto, -a`: Skip prompt and automatically trigger build
+- `--skip, -s`: Skip this check entirely (for hook bypass)
 
 ### Self-Update (`self-update`)
 
@@ -272,8 +340,18 @@ Downloading version v1.1.0...
 ### Build Info Features
 - Collects build.txt from all remote branches without pulling them locally
 - Filters build numbers (minimum: 5000)
-- Checks local vs remote build.txt and prompts for pull if needed
-- Offers to auto-increment build numbers
+- **Intelligent build increment:**
+  - Detects real file changes since last `[ci_build] Trigger build` commit
+  - Ignores trigger build commits from parent branch
+  - Only prompts for increment when real changes exist
+  - Defaults to YES when changes detected
+  - Skips increment entirely when no changes found
+- **Auto pull-and-retry:**
+  - Detects when local build is behind remote
+  - Automatically pulls changes with `--rebase -X theirs`
+  - Schedules commit retry in background
+  - Preserves original commit message
+  - Monitors background process and displays results
 - Suggests available build numbers with proper gaps
 - Multiple output formats
 

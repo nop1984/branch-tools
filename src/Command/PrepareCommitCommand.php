@@ -328,12 +328,23 @@ class PrepareCommitCommand extends Command
             return false;
         }
         
-        // Equal - need to increment
+        // Equal - check if we have real changes to warrant incrementing
         $output->writeln("  Current build: {$localBuildNumber}");
         
+        // Check if there are real file changes since last [Trigger build] commit
+        $output->writeln("  Checking for file changes since last [Trigger build]...");
+        $hasRealChanges = $this->gitService->hasRealChangesSinceLastTriggerBuild(null, $output);
+        
+        if (!$hasRealChanges) {
+            $output->writeln("<info>✓ No file changes detected - build number increment not needed</info>");
+            $output->writeln("");
+            return false;
+        }
+        
+        // Default answer is YES since we have real changes
         if (!$autoMode) {
             $helper = $this->getHelper('question');
-            $question = new ConfirmationQuestion("  Auto-increment to " . ($localBuildNumber + 1) . "? (y/n): ", false);
+            $question = new ConfirmationQuestion("  Auto-increment to " . ($localBuildNumber + 1) . "? (y/n): ", true);
             
             if (!$helper->ask($input, $output, $question)) {
                 $output->writeln("<info>✓ Build number not changed</info>");
@@ -394,7 +405,9 @@ class PrepareCommitCommand extends Command
         $repoRoot = $this->gitService->validateAndGetRepoRoot(getcwd(), $output);
         
         // Use passthru to show git output and wait for completion
-        passthru("git pull {$this->gitService->getRemote()} {$this->currentBranch}", $returnCode);
+        // Use --rebase to handle divergent branches
+        // Use -X theirs to automatically accept remote changes in case of conflicts
+        passthru("git pull --rebase -X theirs {$this->gitService->getRemote()} {$this->currentBranch}", $returnCode);
         
         if ($returnCode !== 0) {
             throw new \Exception("Failed to pull changes");
@@ -403,9 +416,30 @@ class PrepareCommitCommand extends Command
         $output->writeln("<info>✓ Changes pulled successfully</info>");
         $output->writeln("  Scheduling commit to run again...");
         
+        // Read the commit message from .git/COMMIT_EDITMSG (Git stores it there)
+        $commitMsgFile = $repoRoot . '/.git/COMMIT_EDITMSG';
+        $commitMsg = '';
+        
+        if (file_exists($commitMsgFile)) {
+            $commitMsg = file_get_contents($commitMsgFile);
+            // Filter out comment lines (lines starting with #)
+            $lines = explode("\n", $commitMsg);
+            $filteredLines = array_filter($lines, function($line) {
+                return !empty(trim($line)) && strpos(trim($line), '#') !== 0;
+            });
+            $commitMsg = trim(implode("\n", $filteredLines));
+        }
+        
         // Schedule the commit to run after the hook exits (background process)
-        // This allows the current commit to be cancelled cleanly
-        $gitCommitCmd = 'git -C ' . escapeshellarg($repoRoot) . ' commit';
+        // Use --no-verify to skip hooks since we already validated everything
+        // Pass the commit message using -F flag
+        if (!empty($commitMsg)) {
+            $gitCommitCmd = 'git -C ' . escapeshellarg($repoRoot) . ' commit --no-verify -F ' . escapeshellarg($commitMsgFile);
+        } else {
+            // Fallback if no message found (shouldn't happen normally)
+            $gitCommitCmd = 'git -C ' . escapeshellarg($repoRoot) . ' commit --no-verify';
+        }
+        
         GitService::scheduleAsyncCommand($gitCommitCmd, 'Commit completed!', 1);
         
         $output->writeln("");
