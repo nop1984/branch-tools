@@ -168,7 +168,18 @@ class TriggerBuildCommand extends Command
         // Schedule push to run after hook exits (background process)
         $io->text('Scheduling automatic push...');
         
-        $gitPushCmd = 'git -C ' . escapeshellarg($this->repoPath) . ' push';
+        // Build push command with upstream if needed
+        $currentBranch = exec('git -C ' . escapeshellarg($this->repoPath) . ' rev-parse --abbrev-ref HEAD 2>&1');
+        $hasUpstream = exec('git -C ' . escapeshellarg($this->repoPath) . ' rev-parse --abbrev-ref @{upstream} 2>&1', $output, $returnCode);
+        
+        if ($returnCode !== 0) {
+            // No upstream, set it
+            $gitPushCmd = 'git -C ' . escapeshellarg($this->repoPath) . ' push --set-upstream origin ' . escapeshellarg($currentBranch);
+        } else {
+            // Has upstream, just push
+            $gitPushCmd = 'git -C ' . escapeshellarg($this->repoPath) . ' push';
+        }
+        
         GitService::scheduleAsyncCommand($gitPushCmd, 'Push completed! You still have to create MR/PR manually', 1);
         
         $io->newLine();

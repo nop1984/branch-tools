@@ -442,13 +442,15 @@ class GitService
             $cmd .= '"';
             pclose(popen($cmd, 'r'));
         } else {
-            // Unix/Linux/Mac: use sleep and background process
-            $cmd = '(sleep ' . $sleepTime . ' && ' . $command;
+            // Unix/Linux/Mac: use nohup to ensure background process survives
+            $logFile = sys_get_temp_dir() . '/git-async-' . time() . '.log';
+            $cmd = 'nohup bash -c \'sleep ' . $sleepTime . ' && ' . $command;
             if ($successMessage) {
                 $cmd .= ' && echo "" && echo ' . escapeshellarg($successMessage);
             }
-            $cmd .= ') > /dev/null 2>&1 &';
+            $cmd .= '\' > ' . escapeshellarg($logFile) . ' 2>&1 &';
             exec($cmd);
+            echo "Background process started. Log: " . $logFile . "\n";
         }
     }
 }
