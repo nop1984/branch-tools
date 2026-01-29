@@ -308,7 +308,7 @@ class GitService
      * Resolve HEAD or symbolic ref to actual branch name
      * Can optionally provide a commit SHA to find which branch was at that commit
      */
-    private function resolveToActualBranch($ref, $commitSha = null)
+    private function resolveToActualBranch($ref, $commitSha = null, $excludeBranch = null)
     {
         // If it's HEAD, we need to find which branch it was pointing to
         if ($ref === 'HEAD') {
@@ -329,7 +329,7 @@ class GitService
                     // Otherwise, return the first non-current branch
                     foreach ($output as $line) {
                         $branch = trim(str_replace('*', '', $line));
-                        if (!empty($branch) && $branch !== 'HEAD' && $this->isValidBranchName($branch)) {
+                        if (!empty($branch) && $branch !== 'HEAD' && $branch !== $excludeBranch && $this->isValidBranchName($branch)) {
                             return $branch;
                         }
                     }
@@ -373,7 +373,7 @@ class GitService
                 }
                 
                 // Resolve HEAD or symbolic refs to actual branch names
-                $resolvedOrigin = $this->resolveToActualBranch($originCandidate, $commitSha);
+                $resolvedOrigin = $this->resolveToActualBranch($originCandidate, $commitSha, $currentBranch);
                 
                 // Validate it's a real branch name
                 if ($this->isValidBranchName($resolvedOrigin)) {

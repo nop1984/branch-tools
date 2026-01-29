@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-01-29
+
+### Fixed
+- Fixed bug where `getOriginBranch` would incorrectly identify the current branch as its own parent when the branch creation was recorded as "Created from HEAD" in reflog.
+
 ## [1.1.0] - 2026-01-15
 
 ### Added
